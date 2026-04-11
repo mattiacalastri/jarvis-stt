@@ -5,7 +5,7 @@
 <h3 align="center">Voice dictation for Claude Code. Speak. Text appears. Press nothing.</h3>
 
 <p align="center">
-  Offline. Instant. No cloud. No subscription. Built for the forge.
+  Offline. Instant. No cloud. No subscription. Built in the forge.
 </p>
 
 <p align="center">
@@ -13,27 +13,42 @@
   <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-black.svg" alt="Apple Silicon">
   <img src="https://img.shields.io/badge/Whisper-MLX-orange.svg" alt="Whisper MLX">
   <img src="https://img.shields.io/badge/Works%20with-Claude%20Code-white.svg" alt="Claude Code">
+  <img src="https://img.shields.io/badge/Sessions-874%2B-white.svg" alt="874+ Sessions">
 </p>
 
 ---
 
 ## The Problem
 
-Claude Code lives in the terminal. Long prompts break flow. You stop thinking about the problem and start thinking about typing.
+Claude Code lives in the terminal. Long prompts break flow.
 
-The model is ready. Your hands are the bottleneck.
+You stop thinking about the problem and start thinking about typing. The model is ready. The model has been ready. **Your hands are the bottleneck.**
+
+Every word you type is a word you didn't think.
 
 ---
 
 ## The Solution
 
-Speak your prompt. Jarvis transcribes it offline, pastes it into Claude Code, and hits Return. You never touch the keyboard.
+Speak your prompt. Jarvis transcribes it offline, pastes it into Claude Code, and hits Return. The thought goes directly to the model. Nothing in between.
 
 ```
-Microphone → Whisper MLX → clipboard → Cmd+V → Return
+Microphone → Whisper MLX (Apple Silicon) → clipboard → Cmd+V → Return
 ```
 
-Entirely local. Apple Silicon. No API calls. No data leaves your machine.
+Entirely local. No API calls. No data leaves your machine. No latency waiting for a server you don't control.
+
+---
+
+## Origin
+
+This tool was extracted from 874 sessions of building an AI-driven operating system with Claude.
+
+At some point the friction was no longer the model — it was the distance between thought and input. Voice removed that distance. This is the distillation of what worked.
+
+It's the first step toward something larger: a system that understands when you're talking *to* it — not just transcribing everything you say. That's `vocative-detect`, still in the forge. This is the foundation.
+
+Part of the [9 Open Source Tools](https://github.com/mattiacalastri/AI-Forging-Kit) emerging from the forge.
 
 ---
 
@@ -45,7 +60,7 @@ Entirely local. Apple Silicon. No API calls. No data leaves your machine.
 | **Menu bar** | Live status icon — 🔇 off · 🎙 listening · 🔴 recording · ⚡ transcribing |
 | **AutoSend** | Pastes transcription and hits Return automatically |
 | **Hallucination filter** | Suppresses Whisper artifacts and repetition loops |
-| **Pre-roll buffer** | Captures the first syllable — never clips the start of a word |
+| **Pre-roll buffer** | Never clips the first syllable |
 | **One-click stop** | No hunting for a terminal to kill the process |
 
 ---
@@ -78,9 +93,7 @@ First run downloads the Whisper model (~500MB, cached locally after that).
 python3 stt_bar.py
 ```
 
-The 🔇 icon appears in your menu bar. Click → **▶ Avvia**. The icon updates live as you speak. Last transcription is always visible in the menu.
-
-To stop: click the icon → **⏹ Ferma**. No terminal needed.
+🔇 in your menu bar. Click → **▶ Avvia**. Icon updates live. Last transcription visible in the menu. Stop with one click — no terminal needed.
 
 ### Terminal only
 
@@ -88,6 +101,16 @@ To stop: click the icon → **⏹ Ferma**. No terminal needed.
 python3 stt.py              # AutoSend ON  (paste + Return)
 python3 stt.py --no-send    # paste only, no Return
 ```
+
+---
+
+## How it works
+
+**VAD** is RMS-based — no heavy models, no cloud calls. A 200ms pre-roll buffer captures audio before the threshold fires, so the first syllable is always in the recording.
+
+**Hallucination filter** combines blacklist patterns (YouTube subtitles, URLs, known artifacts) with a unique-word ratio check — catches repetition loops like *"renrenrenrenren..."* before they reach your cursor.
+
+**State IPC**: `stt.py` writes to `~/.local/run/jarvis/stt_state`. `stt_bar.py` polls every second. No sockets, no overhead, no daemon.
 
 ---
 
@@ -114,31 +137,16 @@ Edit the constants at the top of `stt.py`:
 
 ---
 
-## How it works
+## See Also
 
-**VAD (Voice Activity Detection)** is RMS-based — no heavy models, no cloud calls. A pre-roll buffer keeps the last ~200ms of audio before the threshold fires, so the first syllable is always captured.
-
-**Hallucination filter** combines:
-- Blacklist patterns (YouTube subtitles, URLs, known Whisper artifacts)
-- Unique-word ratio ≤ 0.35 — catches repetition loops like *"renrenrenrenren..."*
-
-**State IPC**: `stt.py` writes state to `~/.local/run/jarvis/stt_state`. `stt_bar.py` polls every second and updates the icon. No sockets, no overhead.
-
----
-
-## Origin
-
-Built during 800+ sessions of forging an AI-driven operating system with Claude.
-
-The bottleneck was never the model. It was the friction between thought and input. This tool removes that friction.
-
-Part of the [AI Forging Kit](https://github.com/mattiacalastri/AI-Forging-Kit) ecosystem — a framework for building AI into a partner, not a tool.
+- [AI Forging Kit](https://github.com/mattiacalastri/AI-Forging-Kit) — the method to forge your AI into a partner
+- [EGI — Emergent General Intelligence](https://github.com/mattiacalastri/EGI-Emergent-General-Intelligence) — the theory behind why context beats architecture
 
 ---
 
 ## License
 
-MIT — use it, adapt it, ship it.
+MIT — use it, ship it, build on it.
 
 ---
 
