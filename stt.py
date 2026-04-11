@@ -58,11 +58,11 @@ RD = "\033[1;31m"     # rosso
 M  = "\033[1;35m"     # magenta
 
 # ── Allucinazioni ─────────────────────────────────────────────────────────────
-_HALL_PATTERNS = [
+_HALL_PATTERNS = frozenset({
     "sottotitoli", "grazie per aver guardato", "iscriviti",
     "mts srl", "amara.org", "a cura di", "tutti i diritti",
     "www.", ".com", ".it", "youtube", "facebook",
-]
+})
 
 
 def _is_hallucination(text: str) -> bool:
@@ -106,14 +106,15 @@ class Engine:
         self._t_start  = 0.0
         self._t_sil:   float | None = None
         self._t_last   = 0.0
-        self._sem      = threading.Semaphore(1)
+        self._sem      = threading.Semaphore(1)  # 0 = trascrizione in corso
         self._lock     = threading.Lock()
         self._stop     = threading.Event()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def run(self) -> None:
-        _log("◌", DIM, "carico modello Whisper tiny…")
+        model_name = MODEL.split("/")[-1]
+        _log("◌", DIM, f"carico modello {model_name}…")
         mlx_whisper.transcribe(np.zeros(RATE, dtype=np.float32),
                                path_or_hf_repo=MODEL)
 
@@ -121,7 +122,7 @@ class Engine:
         mode = f"{G}AutoSend ON{R}" if self._autosend else f"{Y}Solo paste{R}"
         print(
             f"\n  {C}{'─'*44}{R}\n"
-            f"  {W}Jarvis STT{R}  {DIM}whisper-tiny · it · {THRESHOLD} RMS{R}\n"
+            f"  {W}Jarvis STT{R}  {DIM}{model_name} · it · {THRESHOLD} RMS{R}\n"
             f"  {mode}  {DIM}·  Ctrl+C per uscire{R}\n"
             f"  {C}{'─'*44}{R}\n",
             flush=True,
@@ -152,9 +153,13 @@ class Engine:
     # ── Audio callback ────────────────────────────────────────────────────────
 
     def _cb(self, indata, frames, time_info, status) -> None:
-        chunk = indata[:, 0].copy()
-        rms   = float(np.sqrt(np.mean(chunk ** 2)))
-        now   = time.monotonic()
+        try:
+            chunk = indata[:, 0].copy()
+            rms   = float(np.sqrt(np.mean(chunk ** 2)))
+            now   = time.monotonic()
+        except Exception as e:
+            _log("⚠", RD, f"cb err: {e}")
+            return
 
         with self._lock:
             if rms >= THRESHOLD:
