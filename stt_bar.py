@@ -34,6 +34,7 @@ MIN_DUR     = 0.8
 MAX_DUR     = 12.0
 COOLDOWN    = 0.5
 WAVE_COLS   = 5       # numero di barre nel display live
+SEND_DELAY  = 1.5     # secondi dopo il paste prima di premere Return (autosend)
 
 _BARS = "▁▂▃▄▅▆▇█"
 
@@ -103,30 +104,60 @@ def _save_wav(audio: np.ndarray, rate: int = TARGET_RATE) -> str:
     return tmp.name
 
 
+# Script inline per il subprocess — ha il suo main thread + RunLoop proprio
+_TRANSCRIBE_SCRIPT = r"""
+import sys, time
+wav_path = sys.argv[1]
+lang     = sys.argv[2] if len(sys.argv) > 2 else "it-IT"
+try:
+    import Foundation, Speech, AppKit
+    pool = Foundation.NSAutoreleasePool.alloc().init()
+    url      = Foundation.NSURL.fileURLWithPath_(wav_path)
+    locale   = Foundation.NSLocale.localeWithLocaleIdentifier_(lang)
+    rec      = Speech.SFSpeechRecognizer.alloc().initWithLocale_(locale)
+    if not rec or not rec.isAvailable():
+        sys.exit(0)
+    req = Speech.SFSpeechURLRecognitionRequest.alloc().initWithURL_(url)
+    req.setShouldReportPartialResults_(False)
+    done = [False]; text = [""]
+    def cb(result, error):
+        if result:
+            text[0] = str(result.bestTranscription().formattedString())
+        done[0] = True
+    task = rec.recognitionTaskWithRequest_resultHandler_(req, cb)
+    loop     = AppKit.NSRunLoop.currentRunLoop()
+    deadline = time.time() + 15
+    while not done[0] and time.time() < deadline:
+        loop.runMode_beforeDate_(AppKit.NSDefaultRunLoopMode,
+                                 Foundation.NSDate.dateWithTimeIntervalSinceNow_(0.1))
+    if not done[0]:
+        task.cancel()
+    del pool
+    print(text[0], end="")
+except Exception as e:
+    sys.stderr.write(str(e))
+    sys.exit(1)
+"""
+
+_PYTHON = "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+
+
 def _transcribe_wav(wav_path: str) -> str:
+    import subprocess
     try:
-        import Foundation
-        import Speech
-        url = Foundation.NSURL.fileURLWithPath_(wav_path)
-        locale = Foundation.NSLocale.localeWithLocaleIdentifier_(LANG)
-        recognizer = Speech.SFSpeechRecognizer.alloc().initWithLocale_(locale)
-        if recognizer is None or not recognizer.isAvailable():
-            return ""
-        request = Speech.SFSpeechURLRecognitionRequest.alloc().initWithURL_(url)
-        request.setShouldReportPartialResults_(False)
-        result_text = [""]
-        done = threading.Event()
-        def handler(result, error):
-            if result is not None:
-                result_text[0] = str(result.bestTranscription().formattedString())
-            done.set()
-        task = recognizer.recognitionTaskWithRequest_resultHandler_(request, handler)
-        if not done.wait(timeout=15):
-            task.cancel()
-        return result_text[0].strip()
+        r = subprocess.run(
+            [_PYTHON, "-c", _TRANSCRIBE_SCRIPT, wav_path, LANG],
+            capture_output=True, text=True, timeout=20,
+        )
+        if r.stderr:
+            try:
+                (_RUN_DIR / "stt_err.txt").write_text(r.stderr[:500])
+            except Exception:
+                pass
+        return r.stdout.strip()
     except Exception as e:
         try:
-            (_RUN_DIR / "stt_err.txt").write_text(f"transcribe error: {e}")
+            (_RUN_DIR / "stt_err.txt").write_text(f"subprocess error: {e}")
         except Exception:
             pass
         return ""
@@ -134,14 +165,24 @@ def _transcribe_wav(wav_path: str) -> str:
 
 # ── Paste ──────────────────────────────────────────────────────────────────────
 
-def _paste(text: str) -> None:
+def _paste(text: str, autosend: bool = False) -> None:
     import subprocess
+    # 1. Copia negli appunti
     subprocess.run(["pbcopy"], input=text.encode(), check=True)
+    # 2. CMD+V via osascript — subprocess isolato, ObjC crash non uccide il parent
     try:
-        from pynput.keyboard import Key, Controller
-        kb = Controller()
-        with kb.pressed(Key.cmd):
-            kb.press("v"); kb.release("v")
+        subprocess.run(
+            ["osascript", "-e",
+             'tell application "System Events" to keystroke "v" using command down'],
+            timeout=3, capture_output=True
+        )
+        if autosend:
+            time.sleep(SEND_DELAY)
+            subprocess.run(
+                ["osascript", "-e",
+                 'tell application "System Events" to key code 36'],
+                timeout=3, capture_output=True
+            )
     except Exception:
         pass
 
@@ -188,6 +229,7 @@ class Engine:
         self._lock      = threading.Lock()
         self._stop      = threading.Event()
         self._stop.set()
+        self._autosend  = False
         self._threshold = 0.015
         self._state     = "off"
         self._rms_wave  = deque([0.0] * WAVE_COLS, maxlen=WAVE_COLS)
@@ -208,14 +250,17 @@ class Engine:
                 result += _BARS[idx]
         return result
 
-    def _set_state(self, state: str) -> None:
+    def _set_state(self, state: str, no_io: bool = False) -> None:
         self._state = state
+        if no_io:
+            return
         try:
             STATE_FILE.write_text(state)
         except Exception:
             pass
 
-    def start(self, on_cal_level=None) -> None:
+    def start(self, autosend: bool = False, on_cal_level=None) -> None:
+        self._autosend     = autosend
         self._on_cal_level = on_cal_level or (lambda rms: None)
         self._set_state("calibrating")
         self._stop.clear()
@@ -233,13 +278,16 @@ class Engine:
         cal_done = threading.Event()
 
         def _cal_cb(indata, frames, time_info, status):
-            chunk = resample_poly(indata[:, 0], 1, 3).astype(np.float32)
-            rms   = float(np.sqrt(np.mean(chunk ** 2)))
-            cal_buf.append(rms)
-            with self._lock:
-                self._rms_wave.append(rms)
-            if len(cal_buf) >= int(DEVICE_RATE / CHUNK * 1.5):
-                cal_done.set()
+            try:
+                # Decimazione semplice in callback (no scipy in realtime)
+                chunk = indata[:, 0][::3].astype(np.float32)
+                rms   = float(np.sqrt(np.mean(chunk ** 2)))
+                cal_buf.append(rms)
+                self._rms_wave.append(rms)   # deque è thread-safe
+                if len(cal_buf) >= int(DEVICE_RATE / CHUNK * 1.5):
+                    cal_done.set()
+            except Exception:
+                pass
 
         try:
             with sd.InputStream(samplerate=DEVICE_RATE, channels=1,
@@ -280,45 +328,52 @@ class Engine:
         self._set_state("off")
 
     def _audio_cb(self, indata, frames, time_info, status) -> None:
-        chunk = resample_poly(indata[:, 0], 1, 3).astype(np.float32)
-        rms   = float(np.sqrt(np.mean(chunk ** 2)))
-        now   = time.monotonic()
+        try:
+            chunk = indata[:, 0][::3].astype(np.float32)   # decimazione leggera in callback
+            rms   = float(np.sqrt(np.mean(chunk ** 2)))
+            now   = time.monotonic()
+            do_finalize = False
 
-        with self._lock:
-            # Update wave at ~10Hz (every 5 chunks)
-            self._wave_tick += 1
-            if self._wave_tick >= 5:
-                self._wave_tick = 0
-                self._rms_wave.append(rms)
+            with self._lock:
+                self._wave_tick += 1
+                if self._wave_tick >= 5:
+                    self._wave_tick = 0
+                    self._rms_wave.append(rms)
 
-            if rms >= self._threshold:
-                if not self._speaking:
-                    self._speaking = True
-                    self._t_start  = now
-                    self._buf      = list(self._pre)
-                    self._set_state("recording")
-                self._t_sil = None
-                self._buf.append(chunk)
-                if now - self._t_start >= MAX_DUR:
-                    self._finalize(now)
-            else:
-                self._pre.append(chunk)
-                if self._speaking:
+                if rms >= self._threshold:
+                    if not self._speaking:
+                        self._speaking = True
+                        self._t_start  = now
+                        self._buf      = list(self._pre)
+                        self._state    = "recording"   # no I/O in callback
+                    self._t_sil = None
                     self._buf.append(chunk)
-                    if self._t_sil is None:
-                        self._t_sil = now
-                    elif now - self._t_sil >= SILENCE:
-                        self._finalize(now)
+                    if now - self._t_start >= MAX_DUR:
+                        do_finalize = True
+                else:
+                    self._pre.append(chunk)
+                    if self._speaking:
+                        self._buf.append(chunk)
+                        if self._t_sil is None:
+                            self._t_sil = now
+                        elif now - self._t_sil >= SILENCE:
+                            do_finalize = True
+
+            if do_finalize:
+                self._finalize(now)   # fuori dal lock, può fare I/O e thread
+        except Exception:
+            pass
 
     def _finalize(self, now: float) -> None:
-        dur   = now - self._t_start
-        audio = np.concatenate(self._buf) if self._buf else np.zeros(1, dtype=np.float32)
-        self._speaking = False
-        self._t_sil    = None
-        self._buf      = []
+        with self._lock:
+            dur   = now - self._t_start
+            audio = np.concatenate(self._buf) if self._buf else np.zeros(1, dtype=np.float32)
+            self._speaking = False
+            self._t_sil    = None
+            self._buf      = []
 
         if dur < MIN_DUR or now - self._t_last < COOLDOWN:
-            self._set_state("idle")
+            self._state = "idle"   # il tick scriverà su file
             return
         self._t_last = now
 
@@ -345,7 +400,8 @@ class Engine:
                 except Exception:
                     pass
                 self._set_state("idle")
-                threading.Thread(target=_paste, args=(text,), daemon=True).start()
+                threading.Thread(target=_paste, args=(text, self._autosend),
+                                 daemon=True).start()
             else:
                 self._set_state("idle")
         finally:
@@ -361,14 +417,17 @@ class STTBar(rumps.App):
     def __init__(self) -> None:
         super().__init__("🔇", quit_button=None)
         self._engine       = Engine()
+        self._autosend     = False
         self._auto_started = False
 
-        self._toggle_item = rumps.MenuItem("▶ Avvia", callback=self.toggle)
-        self._status_item = rumps.MenuItem("Spento",  callback=None)
-        self._last_item   = rumps.MenuItem("—",       callback=None)
+        self._toggle_item = rumps.MenuItem("▶ Avvia",     callback=self.toggle)
+        self._send_item   = rumps.MenuItem("⬜ AutoSend", callback=self.toggle_autosend)
+        self._status_item = rumps.MenuItem("Spento",      callback=None)
+        self._last_item   = rumps.MenuItem("—",           callback=None)
 
         self.menu = [
             self._toggle_item,
+            self._send_item,
             None,
             self._status_item,
             self._last_item,
@@ -437,7 +496,13 @@ class STTBar(rumps.App):
             self._status_item.title = "Calibrazione…"
             rumps.notification("Jarvis STT", "Calibrazione microfono",
                                "Resta in silenzio 2 secondi…", sound=False)
-            self._engine.start()
+            self._engine.start(autosend=self._autosend)
+
+    def toggle_autosend(self, _) -> None:
+        self._autosend = not self._autosend
+        self._send_item.title = f"{'✅' if self._autosend else '⬜'} AutoSend"
+        if self._engine.is_active():
+            self._engine._autosend = self._autosend
 
     def _quit(self, _) -> None:
         (_RUN_DIR / "stt_disabled").touch()
