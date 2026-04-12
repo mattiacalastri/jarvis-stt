@@ -5,15 +5,15 @@
 <h3 align="center">Voice dictation for Claude Code. Speak. Text appears. Press nothing.</h3>
 
 <p align="center">
-  Offline. Instant. No cloud. No subscription. Built in the forge.
+  On-device. Instant. No API key. No MLX crash. Built in the forge.
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-teal.svg" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-black.svg" alt="Apple Silicon">
-  <img src="https://img.shields.io/badge/Whisper-MLX-orange.svg" alt="Whisper MLX">
+  <img src="https://img.shields.io/badge/macOS-12%2B-black.svg" alt="macOS 12+">
+  <img src="https://img.shields.io/badge/Backend-SFSpeechRecognizer-blue.svg" alt="SFSpeechRecognizer">
   <img src="https://img.shields.io/badge/Works%20with-Claude%20Code-white.svg" alt="Claude Code">
-  <img src="https://img.shields.io/badge/Sessions-874%2B-white.svg" alt="874+ Sessions">
+  <img src="https://img.shields.io/badge/Sessions-885%2B-white.svg" alt="885+ Sessions">
 </p>
 
 ---
@@ -30,25 +30,41 @@ Every word you type is a word you didn't think.
 
 ## The Solution
 
-Speak your prompt. Jarvis transcribes it offline, pastes it into Claude Code, and hits Return. The thought goes directly to the model. Nothing in between.
+Speak your prompt. Jarvis transcribes it on-device, pastes it into Claude Code, and (optionally) hits Return. The thought goes directly to the model. Nothing in between.
 
 ```
-Microphone → Whisper MLX (Apple Silicon) → clipboard → Cmd+V → Return
+Microphone → Apple Neural Engine → clipboard → Cmd+V → (Return)
 ```
 
-Entirely local. No API calls. No data leaves your machine. No latency waiting for a server you don't control.
+No API key. No model download. No data leaves your machine.
+
+---
+
+## What you see in your menubar
+
+```
+🔇            → off
+📡·▁▂▁·       → calibrating (reading your room noise)
+🎙·▁▂▃·       → idle / listening
+🔴▄▆█▅        → recording your voice
+⚡▂▄▃▁        → transcribing
+```
+
+The waveform bars are live — always showing your current mic level.
 
 ---
 
 ## Origin
 
-This tool was extracted from 874 sessions of building an AI-driven operating system with Claude.
+This tool was extracted from 885 sessions of building an AI-driven operating system with Claude.
 
-At some point the friction was no longer the model — it was the distance between thought and input. Voice removed that distance. This is the distillation of what worked.
+At some point the friction was no longer the model — it was the distance between thought and input. Voice removed that distance.
 
-It's the first step toward something larger: a system that understands when you're talking *to* it — not just transcribing everything you say. That's `vocative-detect`, still in the forge. This is the foundation.
+The first version used Whisper MLX. It worked — until it didn't. Metal/MLX crashes under RAM pressure leave no traceback. A dead process, no text, no error. Not acceptable for a daily driver.
 
-Part of the [9 Open Source Tools](https://github.com/mattiacalastri/AI-Forging-Kit) emerging from the forge.
+`SFSpeechRecognizer` is the same engine behind macOS dictation. It's stable because Apple needs it to be stable. Same accuracy for Italian and English. Zero model download.
+
+Part of the [AI Forging Kit](https://github.com/mattiacalastri/AI-Forging-Kit) emerging from 885 sessions.
 
 ---
 
@@ -56,84 +72,91 @@ Part of the [9 Open Source Tools](https://github.com/mattiacalastri/AI-Forging-K
 
 | Feature | Description |
 |---------|-------------|
-| **Offline** | Whisper MLX runs entirely on Apple Silicon (M1/M2/M3/M4) |
-| **Menu bar** | Live status icon — 🔇 off · 🎙 listening · 🔴 recording · ⚡ transcribing |
-| **AutoSend** | Pastes transcription and hits Return automatically |
-| **Hallucination filter** | Suppresses Whisper artifacts and repetition loops |
+| **On-device** | Apple Neural Engine — no API key, no cloud, no model download |
+| **Live waveform** | Always-visible bars in menubar showing mic level |
+| **AutoSend toggle** | Optional: paste + Return automatically (toggle in menu) |
+| **Auto-calibration** | Reads your room noise on start, sets threshold automatically |
+| **Hallucination filter** | Drops common STT artifacts and repetition loops |
 | **Pre-roll buffer** | Never clips the first syllable |
-| **One-click stop** | No hunting for a terminal to kill the process |
+| **One-click stop** | No hunting for a terminal |
 
 ---
 
 ## Requirements
 
-- macOS with Apple Silicon (M1 or later)
+- macOS 12+ (any hardware — not just Apple Silicon)
 - Python 3.11+
-- Microphone access
+- Microphone
+
+```bash
+pip3 install rumps sounddevice numpy scipy \
+             pyobjc-framework-Speech pyobjc-framework-AVFoundation \
+             pynput
+```
+
+**Permissions** (macOS will prompt on first run):
+- Microphone — audio capture
+- Speech Recognition — SFSpeechRecognizer
+- Accessibility — Cmd+V paste via pynput
 
 ---
 
-## Installation
+## Run
 
 ```bash
-git clone https://github.com/mattiacalastri/jarvis-stt.git
-cd jarvis-stt
-pip3 install -r requirements.txt
+# Must run in an Aqua (desktop) session — use osascript:
+osascript -e 'do shell script "python3 /path/to/stt_bar.py &"'
 ```
 
-First run downloads the Whisper model (~500MB, cached locally after that).
+Or add `com.jarvis.stt.plist` to `~/Library/LaunchAgents/` (edit the path inside first).
 
 ---
 
-## Usage
-
-### Menu bar (recommended)
+## Calibrate your mic first
 
 ```bash
-python3 stt_bar.py
+python3 jarvis_calibrate.py
 ```
 
-🔇 in your menu bar. Click → **▶ Avvia**. Icon updates live. Last transcription visible in the menu. Stop with one click — no terminal needed.
+Speak, whisper, stay quiet — 30 seconds. It prints RMS levels live and suggests your threshold.
 
-### Terminal only
-
-```bash
-python3 stt.py              # AutoSend ON  (paste + Return)
-python3 stt.py --no-send    # paste only, no Return
-```
-
----
-
-## How it works
-
-**VAD** is RMS-based — no heavy models, no cloud calls. A 200ms pre-roll buffer captures audio before the threshold fires, so the first syllable is always in the recording.
-
-**Hallucination filter** combines blacklist patterns (YouTube subtitles, URLs, known artifacts) with a unique-word ratio check — catches repetition loops like *"renrenrenrenren..."* before they reach your cursor.
-
-**State IPC**: `stt.py` writes to `~/.local/run/jarvis/stt_state`. `stt_bar.py` polls every second. No sockets, no overhead, no daemon.
+The app auto-calibrates on every start (1.5s of silence). This script is for when you want to fine-tune.
 
 ---
 
 ## Configuration
 
-Edit the constants at the top of `stt.py`:
+Constants at the top of `stt_bar.py`:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MODEL` | `whisper-small-mlx` | Whisper model size |
-| `LANG` | `it` | Language (`it`, `en`, `auto`) |
-| `THRESHOLD` | `0.004` | RMS speech detection threshold |
-| `SILENCE` | `1.5` | Seconds of silence to end an utterance |
-| `MAX_DUR` | `12.0` | Maximum utterance duration (seconds) |
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `LANG` | `"it-IT"` | Any locale SFSpeechRecognizer supports (`en-US`, `fr-FR`…) |
+| `SILENCE` | `1.5` | Seconds of quiet before finalizing |
+| `MIN_DUR` | `0.8` | Minimum recording duration (rejects claps, pops) |
+| `MAX_DUR` | `12.0` | Hard cap per utterance |
+| `SEND_DELAY` | `1.5` | Pause before hitting Return (when AutoSend is on) |
+| `WAVE_COLS` | `5` | Number of waveform bars in menubar |
 
-### Model options
+---
 
-| Model | Quality | Latency |
-|-------|---------|---------|
-| `whisper-tiny-mlx` | ⭐⭐ | ~0.07s |
-| `whisper-base-mlx` | ⭐⭐⭐ | ~0.15s |
-| `whisper-small-mlx` | ⭐⭐⭐⭐ | ~0.4s ← recommended |
-| `whisper-medium-mlx` | ⭐⭐⭐⭐⭐ | ~1.5s |
+## AutoSend
+
+Click **AutoSend** in the menubar menu to toggle.
+
+- **OFF** (default): transcription is pasted into the focused app. You press Return.
+- **ON**: transcription is pasted, then Return is pressed automatically after `SEND_DELAY` seconds.
+
+Useful when you're dictating prompts into Claude Code and want fully hands-free operation.
+
+---
+
+## Hallucination filter
+
+Common STT outputs on silence or background noise are suppressed:
+
+- Known Italian patterns: "Grazie a tutti", "Buona giornata", "Arrivederci"…
+- Single-word outputs: "Grazie.", "Sì.", "No."…
+- Repetition loops: ≤3 unique characters, or unique-word ratio ≤ 0.35
 
 ---
 

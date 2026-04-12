@@ -1,5 +1,7 @@
-mlx-whisper
+rumps
 sounddevice
 numpy
+scipy
+pyobjc-framework-Speech
+pyobjc-framework-AVFoundation
 pynput
-rumps
