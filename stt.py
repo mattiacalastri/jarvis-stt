@@ -27,6 +27,7 @@ _RUN_DIR   = _pl.Path.home() / ".local" / "run" / "jarvis"
 _RUN_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE     = _RUN_DIR / "stt_state"
 LAST_TEXT_FILE = _RUN_DIR / "stt_last"
+MUTE_FILE      = _RUN_DIR / "stt_mute"
 
 def _write_state(state: str) -> None:
     try:
@@ -35,11 +36,11 @@ def _write_state(state: str) -> None:
         pass
 
 # ── Config ────────────────────────────────────────────────────────────────────
-MODEL      = "mlx-community/whisper-small-mlx"
+MODEL      = "mlx-community/whisper-large-v3-turbo"
 LANG       = "it"
 RATE       = 16000
 CHUNK      = 512
-THRESHOLD  = 0.004
+THRESHOLD  = 0.015
 PRE_ROLL   = 6
 SILENCE    = 1.5
 MIN_DUR    = 0.4
@@ -58,16 +59,28 @@ RD = "\033[1;31m"     # rosso
 M  = "\033[1;35m"     # magenta
 
 # ── Allucinazioni ─────────────────────────────────────────────────────────────
-_HALL_PATTERNS = frozenset({
+_HALL_PATTERNS = [
     "sottotitoli", "grazie per aver guardato", "iscriviti",
     "mts srl", "amara.org", "a cura di", "tutti i diritti",
     "www.", ".com", ".it", "youtube", "facebook",
-})
+    "sous-titrage", "société radio-canada", "radio-canada",
+    "sous-titres", "merci d'avoir", "subtitles by",
+    "grazie a tutti", "grazie per l'attenzione", "grazie mille",
+    "team setter", "consulenti clienti", "prospect",
+    "call commerciali", "astra digital",
+    "buona giornata", "buonasera", "arrivederci",
+]
+
+
+_HALL_EXACT = {"grazie", "grazie.", "prego", "okay", "sì", "si", "no", "ciao"}
 
 
 def _is_hallucination(text: str) -> bool:
     low = text.lower()
     if any(p in low for p in _HALL_PATTERNS):
+        return True
+    stripped = low.strip(".,!?;: ")
+    if stripped in _HALL_EXACT:
         return True
     words = text.split()
     if len(words) < 6:
@@ -106,15 +119,14 @@ class Engine:
         self._t_start  = 0.0
         self._t_sil:   float | None = None
         self._t_last   = 0.0
-        self._sem      = threading.Semaphore(1)  # 0 = trascrizione in corso
+        self._sem      = threading.Semaphore(1)
         self._lock     = threading.Lock()
         self._stop     = threading.Event()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def run(self) -> None:
-        model_name = MODEL.split("/")[-1]
-        _log("◌", DIM, f"carico modello {model_name}…")
+        _log("◌", DIM, "carico modello Whisper tiny…")
         mlx_whisper.transcribe(np.zeros(RATE, dtype=np.float32),
                                path_or_hf_repo=MODEL)
 
@@ -122,7 +134,7 @@ class Engine:
         mode = f"{G}AutoSend ON{R}" if self._autosend else f"{Y}Solo paste{R}"
         print(
             f"\n  {C}{'─'*44}{R}\n"
-            f"  {W}Jarvis STT{R}  {DIM}{model_name} · it · {THRESHOLD} RMS{R}\n"
+            f"  {W}Jarvis STT{R}  {DIM}{MODEL.split('/')[-1]} · it · {THRESHOLD} RMS{R}\n"
             f"  {mode}  {DIM}·  Ctrl+C per uscire{R}\n"
             f"  {C}{'─'*44}{R}\n",
             flush=True,
@@ -153,13 +165,12 @@ class Engine:
     # ── Audio callback ────────────────────────────────────────────────────────
 
     def _cb(self, indata, frames, time_info, status) -> None:
-        try:
-            chunk = indata[:, 0].copy()
-            rms   = float(np.sqrt(np.mean(chunk ** 2)))
-            now   = time.monotonic()
-        except Exception as e:
-            _log("⚠", RD, f"cb err: {e}")
+        # Mute gate: if MUTE_FILE exists, drop audio (anti-feedback when TTS plays)
+        if MUTE_FILE.exists():
             return
+        chunk = indata[:, 0].copy()
+        rms   = float(np.sqrt(np.mean(chunk ** 2)))
+        now   = time.monotonic()
 
         with self._lock:
             if rms >= THRESHOLD:
@@ -214,8 +225,19 @@ class Engine:
             _write_state("transcribing")
             _log("⚡", Y, f"trascrivo  {dur:.1f}s…")
             t0     = time.monotonic()
-            result = mlx_whisper.transcribe(audio, path_or_hf_repo=MODEL,
-                                            language=LANG)
+            # Normalize audio to avoid soft-speech hallucinations (grazie a tutti loop)
+            peak = float(np.abs(audio).max())
+            if peak > 0.001:
+                audio = np.clip(audio / peak * 0.95, -1.0, 1.0).astype(np.float32)
+            result = mlx_whisper.transcribe(
+                audio,
+                path_or_hf_repo=MODEL,
+                language=LANG,
+                condition_on_previous_text=False,
+                no_speech_threshold=0.6,
+                compression_ratio_threshold=2.2,
+                logprob_threshold=-1.0,
+            )
             text    = result.get("text", "").strip()
             elapsed = time.monotonic() - t0
 

@@ -5,3 +5,7 @@ scipy
 pyobjc-framework-Speech
 pyobjc-framework-AVFoundation
 pynput
+mlx-whisper
+anthropic
+requests
+python-dotenv
