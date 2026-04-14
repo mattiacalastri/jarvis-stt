@@ -1,24 +1,32 @@
-<p align="center">
-  <strong>Jarvis STT</strong>
-</p>
+<!--
+SEO Keywords: claude code, voice dictation, whisper, apple silicon, macos, offline stt,
+speech recognition, sfspeechrecognizer, menubar, on-device ai, italian ai, astra digital,
+jarvis, polpo squad, anthropic
+SEO Description: Offline voice dictation for Claude Code. Speak, text appears in your terminal. On-device, menu bar, zero cloud. Built by Astra Digital.
+Author: Mattia Calastri
+Location: Verona, Italy
+-->
 
-<h3 align="center">Voice dictation for Claude Code. Speak. Text appears. Press nothing.</h3>
+<div align="center">
 
-<p align="center">
-  On-device. Instant. No API key. No MLX crash. Built in the forge.
-</p>
+# 🐙 Jarvis STT
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-teal.svg" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/macOS-12%2B-black.svg" alt="macOS 12+">
-  <img src="https://img.shields.io/badge/Backend-SFSpeechRecognizer-blue.svg" alt="SFSpeechRecognizer">
-  <img src="https://img.shields.io/badge/Works%20with-Claude%20Code-white.svg" alt="Claude Code">
-  <img src="https://img.shields.io/badge/Sessions-885%2B-white.svg" alt="885+ Sessions">
-</p>
+### Voice dictation for Claude Code. Speak. Text appears. Press nothing.
+
+On-device. Instant. No API key. No cloud. Built in the forge.
+
+[![License](https://img.shields.io/badge/License-MIT-00d4aa?labelColor=0a0f1a)](./LICENSE)
+[![Stars](https://img.shields.io/github/stars/mattiacalastri/jarvis-stt?color=00d4aa&labelColor=0a0f1a)](https://github.com/mattiacalastri/jarvis-stt/stargazers)
+[![macOS](https://img.shields.io/badge/macOS-12+-00d4aa?labelColor=0a0f1a&logo=apple&logoColor=white)](https://www.apple.com/macos/)
+[![Backend](https://img.shields.io/badge/backend-SFSpeechRecognizer-00d4aa?labelColor=0a0f1a)](#)
+[![Sessions](https://img.shields.io/badge/sessions-900+-00d4aa?labelColor=0a0f1a)](#)
+[![Astra Digital](https://img.shields.io/badge/built_by-Astra_Digital-00d4aa?labelColor=0a0f1a)](https://mattiacalastri.com)
+
+</div>
 
 ---
 
-## The Problem
+## ✨ Why
 
 Claude Code lives in the terminal. Long prompts break flow.
 
@@ -26,9 +34,7 @@ You stop thinking about the problem and start thinking about typing. The model i
 
 Every word you type is a word you didn't think.
 
----
-
-## The Solution
+## 🎯 What it does
 
 Speak your prompt. Jarvis transcribes it on-device, pastes it into Claude Code, and (optionally) hits Return. The thought goes directly to the model. Nothing in between.
 
@@ -38,9 +44,7 @@ Microphone → Apple Neural Engine → clipboard → Cmd+V → (Return)
 
 No API key. No model download. No data leaves your machine.
 
----
-
-## What you see in your menubar
+## 📟 What you see in your menubar
 
 ```
 🔇            → off
@@ -52,11 +56,36 @@ No API key. No model download. No data leaves your machine.
 
 The waveform bars are live — always showing your current mic level.
 
----
+## 🚀 Quick Start
 
-## Origin
+```bash
+pip3 install rumps sounddevice numpy scipy \
+             pyobjc-framework-Speech pyobjc-framework-AVFoundation \
+             pynput
 
-This tool was extracted from 885 sessions of building an AI-driven operating system with Claude.
+# Must run in an Aqua (desktop) session — use osascript:
+osascript -e 'do shell script "python3 /path/to/stt_bar.py &"'
+```
+
+Or add `com.jarvis.stt.plist` to `~/Library/LaunchAgents/` (edit the path inside first).
+
+**Permissions** (macOS prompts on first run): Microphone · Speech Recognition · Accessibility.
+
+## 🎯 Features
+
+| Feature | Description |
+|---------|-------------|
+| 🐙 **On-device** | Apple Neural Engine — no API key, no cloud, no model download |
+| 📊 **Live waveform** | Always-visible bars in menubar showing mic level |
+| ⚡ **AutoSend toggle** | Optional: paste + Return automatically (toggle in menu) |
+| 🎚️ **Auto-calibration** | Reads your room noise on start, sets threshold automatically |
+| 🛡️ **Hallucination filter** | Drops common STT artifacts and repetition loops |
+| 🔄 **Pre-roll buffer** | Never clips the first syllable |
+| 🛑 **One-click stop** | No hunting for a terminal |
+
+## 🏗️ Origin
+
+This tool was extracted from 900+ sessions of building an AI-driven operating system with Claude.
 
 At some point the friction was no longer the model — it was the distance between thought and input. Voice removed that distance.
 
@@ -64,67 +93,15 @@ The first version used Whisper MLX. It worked — until it didn't. Metal/MLX cra
 
 `SFSpeechRecognizer` is the same engine behind macOS dictation. It's stable because Apple needs it to be stable. Same accuracy for Italian and English. Zero model download.
 
-Part of the [AI Forging Kit](https://github.com/mattiacalastri/AI-Forging-Kit) emerging from 885 sessions.
-
----
-
-## Features
-
-| Feature | Description |
-|---------|-------------|
-| **On-device** | Apple Neural Engine — no API key, no cloud, no model download |
-| **Live waveform** | Always-visible bars in menubar showing mic level |
-| **AutoSend toggle** | Optional: paste + Return automatically (toggle in menu) |
-| **Auto-calibration** | Reads your room noise on start, sets threshold automatically |
-| **Hallucination filter** | Drops common STT artifacts and repetition loops |
-| **Pre-roll buffer** | Never clips the first syllable |
-| **One-click stop** | No hunting for a terminal |
-
----
-
-## Requirements
-
-- macOS 12+ (any hardware — not just Apple Silicon)
-- Python 3.11+
-- Microphone
-
-```bash
-pip3 install rumps sounddevice numpy scipy \
-             pyobjc-framework-Speech pyobjc-framework-AVFoundation \
-             pynput
-```
-
-**Permissions** (macOS will prompt on first run):
-- Microphone — audio capture
-- Speech Recognition — SFSpeechRecognizer
-- Accessibility — Cmd+V paste via pynput
-
----
-
-## Run
-
-```bash
-# Must run in an Aqua (desktop) session — use osascript:
-osascript -e 'do shell script "python3 /path/to/stt_bar.py &"'
-```
-
-Or add `com.jarvis.stt.plist` to `~/Library/LaunchAgents/` (edit the path inside first).
-
----
-
-## Calibrate your mic first
+## 🎚️ Calibrate your mic first
 
 ```bash
 python3 jarvis_calibrate.py
 ```
 
-Speak, whisper, stay quiet — 30 seconds. It prints RMS levels live and suggests your threshold.
+Speak, whisper, stay quiet — 30 seconds. It prints RMS levels live and suggests your threshold. The app auto-calibrates on every start (1.5s of silence). This script is for when you want to fine-tune.
 
-The app auto-calibrates on every start (1.5s of silence). This script is for when you want to fine-tune.
-
----
-
-## Configuration
+## ⚙️ Configuration
 
 Constants at the top of `stt_bar.py`:
 
@@ -137,9 +114,7 @@ Constants at the top of `stt_bar.py`:
 | `SEND_DELAY` | `1.5` | Pause before hitting Return (when AutoSend is on) |
 | `WAVE_COLS` | `5` | Number of waveform bars in menubar |
 
----
-
-## AutoSend
+## 🔊 AutoSend
 
 Click **AutoSend** in the menubar menu to toggle.
 
@@ -148,9 +123,7 @@ Click **AutoSend** in the menubar menu to toggle.
 
 Useful when you're dictating prompts into Claude Code and want fully hands-free operation.
 
----
-
-## Hallucination filter
+## 🛡️ Hallucination filter
 
 Common STT outputs on silence or background noise are suppressed:
 
@@ -158,23 +131,29 @@ Common STT outputs on silence or background noise are suppressed:
 - Single-word outputs: "Grazie.", "Sì.", "No."…
 - Repetition loops: ≤3 unique characters, or unique-word ratio ≤ 0.35
 
----
+## 🛠️ Tech Stack
 
-## See Also
+![Python](https://img.shields.io/badge/Python-3.11+-00d4aa?labelColor=0a0f1a&logo=python&logoColor=white)
+![macOS](https://img.shields.io/badge/macOS-12+-00d4aa?labelColor=0a0f1a&logo=apple&logoColor=white)
+![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-ready-00d4aa?labelColor=0a0f1a)
+![rumps](https://img.shields.io/badge/rumps-menubar-00d4aa?labelColor=0a0f1a)
+
+## 🔗 See Also
 
 - [AI Forging Kit](https://github.com/mattiacalastri/AI-Forging-Kit) — the method to forge your AI into a partner
 - [EGI — Emergent General Intelligence](https://github.com/mattiacalastri/EGI-Emergent-General-Intelligence) — the theory behind why context beats architecture
+- [Polpo Cockpit](https://github.com/mattiacalastri/polpo-cockpit) — orchestrate Claude Code agents from your menubar
 
----
-
-## License
+## 📄 License
 
 MIT — use it, ship it, build on it.
 
 ---
 
-<p align="center">
-  <em>"The bottleneck was never the model."</em>
-  <br><br>
-  — Mattia Calastri, 2026
-</p>
+<div align="center">
+
+**Built with 🐙 by [Mattia Calastri](https://mattiacalastri.com) · [Astra Digital Marketing](https://digitalastra.it)**
+
+*"The bottleneck was never the model."*
+
+</div>
