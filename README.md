@@ -22,6 +22,8 @@ On-device. Instant. No API key. No cloud. Built in the forge.
 [![Sessions](https://img.shields.io/badge/sessions-900+-00d4aa?labelColor=0a0f1a)](#)
 [![Astra Digital](https://img.shields.io/badge/built_by-Astra_Digital-00d4aa?labelColor=0a0f1a)](https://mattiacalastri.com)
 
+![Jarvis STT — il Polpo che ascolta](assets/hero.jpg)
+
 </div>
 
 ---
