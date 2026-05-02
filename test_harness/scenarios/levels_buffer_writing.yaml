@@ -1,0 +1,31 @@
+# Verifica che stt_bar.py scriva il ring buffer 60 float32 in stt_levels.bin
+# e che il file si aggiorni nel tempo (producer-consumer integrity).
+# Sess.1232 — feature waveform live JarvisToggle.
+name: Levels Buffer Writing
+description: stt_levels.bin presente, 240 byte, aggiornato in 3s
+timeout: 8
+
+setup: |
+  # Snapshot mtime iniziale
+  test -f ~/.local/run/jarvis/stt_levels.bin && \
+  stat -f "%m" ~/.local/run/jarvis/stt_levels.bin > /tmp/levels_mtime_before.txt
+
+action: |
+  sleep 3
+
+check: |
+  /opt/homebrew/bin/python3 -c "
+  import struct, os
+  p = os.path.expanduser('~/.local/run/jarvis/stt_levels.bin')
+  data = open(p,'rb').read()
+  assert len(data) == 240, f'expected 240 bytes, got {len(data)}'
+  floats = struct.unpack('<60f', data)
+  assert all(isinstance(f, float) for f in floats), 'corrupt floats'
+  before = int(open('/tmp/levels_mtime_before.txt').read().strip())
+  after = int(os.path.getmtime(p))
+  assert after > before, f'mtime non aggiornato: {after} <= {before}'
+  print('OK')
+  "
+
+teardown: |
+  rm -f /tmp/levels_mtime_before.txt

@@ -1,0 +1,16 @@
+# Verifica che JarvisToggle.app menu bar Swift sia in esecuzione.
+# Pattern sess.1230: tre cuori OUT/IN/LOOP visibili → app deve girare.
+name: JarvisToggle App Running
+description: JarvisToggle binary alive con bundle id com.astra.jarvis-toggle
+timeout: 5
+
+setup: ""
+
+action: |
+  pgrep -f "JarvisToggle.app/Contents/MacOS/JarvisToggle" > /dev/null
+
+check: |
+  # Bundle plist accessibile
+  test -f ~/projects/jarvis-toggle-widget/JarvisToggle.app/Contents/MacOS/JarvisToggle
+
+teardown: ""

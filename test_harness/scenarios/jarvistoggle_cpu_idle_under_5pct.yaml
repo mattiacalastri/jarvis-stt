@@ -1,0 +1,41 @@
+# Verifica che JarvisToggle.app NON sustained CPU loop quando panel hidden + STT OFF.
+# Cicatrice sess.1238: levelsTimer 30 FPS main thread + SwiftUI animation .easeOut(0.06)
+# su WaveformView (60 Capsule) → CPU 39-49% sustained anche idle.
+# Fix: suspendLevels()/resumeLevels() su panel orderOut/orderFrontRegardless +
+# guard isOn in refreshLevels.
+# Threshold: avg CPU < 5.0% su 5 sample × 5s con panel hidden.
+name: JarvisToggle CPU Idle Under 5pct
+description: panel hidden + STT off → avg CPU < 5% (post-fix sess.1238)
+timeout: 40
+
+setup: |
+  # PID JarvisToggle live (assume app già lanciata; se assente, fail in action)
+  pgrep -f "JarvisToggle.app/Contents/MacOS/JarvisToggle" > /tmp/jt_pid.txt
+  test -s /tmp/jt_pid.txt
+
+action: |
+  # Sample CPU 5x ogni 5s = 25s totali. Salva pcpu in file.
+  PID_VAL=$(cat /tmp/jt_pid.txt)
+  : > /tmp/jt_cpu_samples.txt
+  for i in 1 2 3 4 5; do
+    ps -p "$PID_VAL" -o pcpu= 2>/dev/null | tr -d ' ' >> /tmp/jt_cpu_samples.txt
+    echo >> /tmp/jt_cpu_samples.txt
+    sleep 5
+  done
+  test -s /tmp/jt_cpu_samples.txt
+
+check: |
+  /opt/homebrew/bin/python3 -c "
+  import sys
+  with open('/tmp/jt_cpu_samples.txt') as f:
+      vals = [float(x.strip()) for x in f if x.strip()]
+  assert len(vals) == 5, f'expected 5 samples, got {len(vals)}: {vals}'
+  avg = sum(vals) / len(vals)
+  peak = max(vals)
+  print(f'samples={vals} avg={avg:.2f}% peak={peak:.2f}%')
+  assert avg < 5.0, f'avg CPU {avg:.2f}% >= 5.0% (cicatrice sess.1238 levelsTimer leak)'
+  print('OK')
+  "
+
+teardown: |
+  rm -f /tmp/jt_pid.txt /tmp/jt_cpu_samples.txt

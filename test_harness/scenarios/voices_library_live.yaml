@@ -1,0 +1,37 @@
+# Verifica che dump_voices.py produca voices.json con voci LIVE da ElevenLabs
+# e che voice_briefing legga voice_selected dal centro di comando.
+# Sess.1232 — voice picker JarvisToggle.app.
+name: Voices Library Live
+description: voices.json valido + voice_briefing onora voice_selected
+timeout: 15
+
+setup: |
+  # Backup eventuale voce selezionata corrente
+  cp ~/.local/run/jarvis/voice_selected /tmp/voice_selected.bak 2>/dev/null || true
+
+action: |
+  /opt/homebrew/bin/python3 ~/scripts/dump_voices.py >/dev/null 2>&1
+
+check: |
+  /opt/homebrew/bin/python3 -c "
+  import json, subprocess, os
+  p = os.path.expanduser('~/.local/run/jarvis/voices.json')
+  d = json.load(open(p))
+  assert isinstance(d.get('voices'), list) and len(d['voices']) >= 5, f'expected >=5 voices got {len(d.get(\"voices\",[]))}'
+  assert d.get('default'), 'default missing'
+  router_voices = [v for v in d['voices'] if v.get('is_router')]
+  assert len(router_voices) >= 3, f'expected >=3 router voices got {len(router_voices)}'
+  # Test integration: scrivi 'callum', verifica voice_briefing legge
+  open(os.path.expanduser('~/.local/run/jarvis/voice_selected'),'w').write('callum')
+  out = subprocess.run(['/opt/homebrew/bin/python3', os.path.expanduser('~/scripts/voice_briefing.py'),
+                        'test', '--no-send'], capture_output=True, text=True, timeout=10)
+  combined = out.stdout + out.stderr
+  assert 'voice=callum' in combined, f'voice_briefing did not pick callum: {combined[:300]}'
+  print('OK')
+  "
+
+teardown: |
+  # Ripristina selezione precedente
+  if [ -f /tmp/voice_selected.bak ]; then
+      mv /tmp/voice_selected.bak ~/.local/run/jarvis/voice_selected
+  fi

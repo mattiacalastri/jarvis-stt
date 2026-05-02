@@ -1,0 +1,18 @@
+# Verifica che il daemon jarvis_autosend sia vivo e responsive.
+# Cicatrice sess.1232: plist osascript+& trampoline = orphan untracked.
+name: Autosend Daemon Alive
+description: Daemon pynput jarvis_autosend.py deve rispondere a launchctl + pgrep
+timeout: 5
+
+setup: ""
+
+action: |
+  pgrep -f jarvis_autosend.py > /dev/null
+
+check: |
+  # Stato file deve esistere
+  test -f ~/.local/run/jarvis/jarvis_autosend_state && \
+  # Daemon registrato in launchctl
+  launchctl list | grep -q com.jarvis.autosend
+
+teardown: ""

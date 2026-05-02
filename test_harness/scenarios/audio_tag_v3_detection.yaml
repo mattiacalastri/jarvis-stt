@@ -1,0 +1,23 @@
+# Verifica che has_audio_tags() classifichi correttamente testo con tag v3.
+# Critico: tag → switch automatico modello eleven_v3 (più caro). Misclassify = quota burn.
+name: Audio Tag v3 Detection
+description: has_audio_tags() True su [whispers]/[curious], False su testo plain
+timeout: 5
+
+setup: ""
+
+action: |
+  /opt/homebrew/bin/python3 -c "
+  import sys
+  sys.path.insert(0, '$HOME/scripts')
+  from voice_router import has_audio_tags
+  assert has_audio_tags('[whispers] segreto') is True, 'tag whispers missed'
+  assert has_audio_tags('[curious] domanda') is True, 'tag curious missed'
+  assert has_audio_tags('Signore, briefing operativo.') is False, 'false positive'
+  # NOTE: regex permissiva — '[final]' matcha (false positive noto, da decidere se whitelistare)
+  print('OK')
+  "
+
+check: ""
+
+teardown: ""

@@ -1,0 +1,20 @@
+# Verifica che STT (stt_bar.py) sia vivo e abbia diag valida.
+name: STT Runtime Ready
+description: stt_bar process alive, engine impostato, diag con threshold > 0
+timeout: 5
+
+setup: ""
+
+action: |
+  pgrep -f stt_bar.py > /dev/null
+
+check: |
+  # PID file presente e processo vivo
+  test -f ~/.local/run/jarvis/stt_bar.pid && \
+  kill -0 "$(cat ~/.local/run/jarvis/stt_bar.pid)" 2>/dev/null && \
+  # Engine impostato
+  test -s ~/.local/run/jarvis/stt_engine.txt && \
+  # Diag con threshold non zero
+  grep -q "threshold=0\." ~/.local/run/jarvis/stt_diag.txt
+
+teardown: ""

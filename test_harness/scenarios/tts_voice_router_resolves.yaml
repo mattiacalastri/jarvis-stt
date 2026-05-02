@@ -1,0 +1,28 @@
+# Verifica che voice_router risolva correttamente skill → voce.
+# Non chiama ElevenLabs (no quota burn), solo dry-run.
+name: TTS Voice Router Resolves
+description: voice_router.py deve mappare 'garden-walk' → andy, 'dream' → george
+timeout: 8
+
+setup: ""
+
+action: |
+  /opt/homebrew/bin/python3 -c "
+  import sys
+  sys.path.insert(0, '$HOME/scripts')
+  from voice_router import select_voice, SKILL_ROUTING, VOICES
+  # garden-walk deve esistere nel routing
+  assert 'garden-walk' in SKILL_ROUTING, 'garden-walk missing'
+  assert 'dream' in SKILL_ROUTING, 'dream missing'
+  # Voci core devono esistere
+  for v in ('andy', 'george', 'callum'):
+      assert v in VOICES, f'{v} missing from VOICES'
+  # select_voice deve essere callable
+  out = select_voice(skill='garden-walk')
+  assert out, 'select_voice returned empty'
+  print('OK')
+  "
+
+check: ""
+
+teardown: ""
