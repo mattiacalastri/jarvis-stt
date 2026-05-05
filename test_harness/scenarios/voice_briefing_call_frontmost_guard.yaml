@@ -1,0 +1,28 @@
+# Verifica che voice_briefing.py contenga il guard IN_CALL pre-mute.
+# Cicatrice sess.1577 (call Michele Spada): senza guard, ogni call cliente
+# ha mic Mattia muto mentre Jarvis parla → prospect non sente Mattia.
+# Regression test statico — non simula call live, verifica solo presenza guard.
+name: Voice Briefing Call Frontmost Guard
+description: voice_briefing.py deve contenere guard IN_CALL su HW MUTE + OUTPUT VOLUME (sess.1577)
+timeout: 5
+
+setup: ""
+
+action: |
+  /opt/homebrew/bin/python3 -c "
+  from pathlib import Path
+  src = Path.home() / 'scripts' / 'voice_briefing.py'
+  code = src.read_text()
+  # Cicatrice sess.1577: feedback_jarvis_voice_briefing_no_frontmost_guard.md
+  assert 'IN_CALL' in code, 'IN_CALL guard missing — sess.1577 regression'
+  assert 'CALL FRONTMOST GUARD' in code, 'guard comment marker missing'
+  assert 'if not IN_CALL:' in code, 'HW MUTE not gated by IN_CALL'
+  assert 'and not IN_CALL:' in code, 'OUTPUT VOLUME not gated by IN_CALL'
+  # Detection apps + window title hints
+  assert 'zoom' in code.lower() and 'google meet' in code.lower(), 'call detection patterns missing'
+  print('OK — sess.1577 guard active')
+  "
+
+check: ""
+
+teardown: ""
