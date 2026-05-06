@@ -8,8 +8,13 @@ Shared core for:
   - Any skill/hook/cron that needs to speak to Mattia
 
 Usage:
-    python3 voice_briefing.py "testo da parlare" [--chat 368092324] [--save path.mp3]
+    python3 voice_briefing.py "testo da parlare" [--chat $OWNER_CHAT_ID] [--save path.mp3]
     echo "testo" | python3 voice_briefing.py - [--save path.mp3]
+
+Configuration (env vars):
+    OWNER_CHAT_ID     Telegram chat_id authorized to receive voice messages.
+                      Required. The bot is hard-locked to this single chat.
+    ELEVENLABS_API_KEY  In ~/claude_voice/.env
 
 Exit 0 on success. Exit 1 on TTS/TG failure.
 """
@@ -28,7 +33,20 @@ from pathlib import Path
 import certifi
 
 
-OWNER_CHAT_ID = "368092324"
+OWNER_CHAT_ID = os.environ.get("OWNER_CHAT_ID", "").strip()
+if not OWNER_CHAT_ID:
+    # Fallback: leggi da ~/claude_voice/.env se OWNER_CHAT_ID è definito lì
+    _env_owner = (Path.home() / "claude_voice" / ".env")
+    if _env_owner.exists():
+        for _line in _env_owner.read_text().splitlines():
+            if _line.startswith("OWNER_CHAT_ID="):
+                OWNER_CHAT_ID = _line.split("=", 1)[1].strip().strip('"').strip("'")
+                break
+if not OWNER_CHAT_ID:
+    raise RuntimeError(
+        "OWNER_CHAT_ID not configured. Set the env var or add OWNER_CHAT_ID=<your_telegram_chat_id> "
+        "to ~/claude_voice/.env (the chat_id authorized to receive voice briefings)."
+    )
 ASTRA_ENV = Path.home() / "claude_voice" / ".env"
 POLPO_BOTS_ENV = Path.home() / ".config" / "credentials" / "polpo_bots.env"
 
@@ -98,9 +116,8 @@ def _resolve_voice_bot_token() -> tuple[str, str]:
 
 
 def send_voice(audio_bytes: bytes, chat_id: str, caption: str = "") -> None:
-    # HARD LOCK: il bot Jarvis spedisce SOLO a Mattia (chat_id 368092324).
-    # Come Falco (Marconi) e Flexa (Guccione), i bot Polpo sono locked by owner.
-    # Jarvis = owner Mattia. Fine.
+    # HARD LOCK: il bot Jarvis spedisce SOLO al chat_id configurato in OWNER_CHAT_ID.
+    # Come gli altri bot single-owner (Falco, Flexa), Jarvis è locked per design.
     if str(chat_id) != OWNER_CHAT_ID:
         raise RuntimeError(
             f"SECURITY LOCK: voice_briefing can only send to OWNER_CHAT_ID={OWNER_CHAT_ID}, "
