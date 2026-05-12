@@ -1,0 +1,39 @@
+# sess.1765 — Verifica mood jarvis-sarcastic: inject_jarvis_tags prepende [dry] o [sarcastic]
+# Protegge cicatrice: tag v3 devono essere iniettati, NON letti letteralmente.
+# Nessuna chiamata ElevenLabs (dry-run router only, zero quota burn).
+name: Jarvis Mood Sarcastic
+description: inject_jarvis_tags(text, 'jarvis-sarcastic') deve prepend [dry] o [sarcastic]; select_voice(mood='jarvis-sarcastic') deve ritornare andy + eleven_v3
+timeout: 8
+
+setup: ""
+
+action: |
+  /opt/homebrew/bin/python3 -c "
+  import sys
+  sys.path.insert(0, '$HOME/scripts')
+  from voice_router import inject_jarvis_tags, select_voice, has_audio_tags, VOICES, MODEL_V3
+
+  # 1. inject_jarvis_tags su testo plain deve aggiungere tag
+  text_in = 'Naturalmente, signore. Il LaunchAgent ha tentato 990 volte.'
+  out = inject_jarvis_tags(text_in, 'jarvis-sarcastic')
+  assert has_audio_tags(out), f'Nessun tag v3 iniettato: {out!r}'
+  assert out.startswith('[dry]') or out.startswith('[sarcastic]'), f'Tag errato: {out[:30]!r}'
+
+  # 2. Testo con tag pre-esistenti NON deve essere modificato (zero-breaking)
+  tagged = '[unimpressed] già lo sapevo.'
+  out2 = inject_jarvis_tags(tagged, 'jarvis-sarcastic')
+  assert out2 == tagged, f'Testo con tag modificato: {out2!r}'
+
+  # 3. select_voice deve tornare andy + eleven_v3 per jarvis-sarcastic
+  vid, settings, model, vname = select_voice(mood='jarvis-sarcastic')
+  assert vname == 'andy', f'Voce errata: {vname!r} (atteso andy)'
+  assert model == MODEL_V3, f'Modello errato: {model!r} (atteso {MODEL_V3!r})'
+  assert settings['stability'] == 0.30, f'Stability errata: {settings[\"stability\"]}'
+  assert 'speed' not in settings, 'speed non deve essere in settings v3'
+
+  print('OK sarcastic')
+  "
+
+check: ""
+
+teardown: ""

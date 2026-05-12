@@ -1,0 +1,53 @@
+# sess.1765 — TARS meta: inject_tars_meta() espone percentage marker su segnali critici
+# Pattern canone: "[deadpan] Honesty: N%. <testo> Humor setting: M%."
+# Su testo senza segnali critici: solo [deadpan] prepend.
+# Zero quota burn — dry-run router only.
+name: TARS Meta
+description: inject_tars_meta() percentage marker su segnali critici; plain su testo neutro
+timeout: 8
+
+setup: ""
+
+action: |
+  /opt/homebrew/bin/python3 -c "
+  import re, sys
+  sys.path.insert(0, '$HOME/scripts')
+  from voice_router import inject_tars_meta, select_voice, has_audio_tags, SKILL_ROUTING, MODEL_V3
+
+  # Regex per verificare percentage marker
+  PCT_RE = re.compile(r'(Honesty: \d+%|Humor setting: \d+%)')
+
+  # 1. Input con segnale critico → percentage marker
+  text_critical = 'Verdetto pre-flight: NO-GO Meta Ads launch. Drift rilevato su cassa.'
+  out = inject_tars_meta(text_critical)
+  assert has_audio_tags(out), f'Nessun tag v3: {out!r}'
+  assert PCT_RE.search(out), f'Nessun percentage marker: {out!r}'
+  assert 'Honesty:' in out, f'Honesty mancante: {out!r}'
+  assert 'Humor setting:' in out, f'Humor setting mancante: {out!r}'
+
+  # 2. Input senza segnale critico → solo [deadpan] prepend, nessun %
+  text_plain = 'Sistema operativo. Tutto nominale.'
+  out2 = inject_tars_meta(text_plain)
+  assert out2.startswith('[deadpan]'), f'Plain prefix errato: {out2[:30]!r}'
+  assert not PCT_RE.search(out2), f'Percentage iniettato su testo neutro: {out2!r}'
+
+  # 3. Testo già taggato NON modificato
+  tagged = '[deadpan] Già taggato.'
+  out3 = inject_tars_meta(tagged)
+  assert out3 == tagged, f'Testo pre-taggato modificato: {out3!r}'
+
+  # 4. Skill 'morning-check' → bill + tars-meta
+  assert SKILL_ROUTING.get('morning-check') == ('bill', 'tars-meta'), f'Routing errato: {SKILL_ROUTING.get(\"morning-check\")}'
+  vid, settings, model, vname = select_voice(skill='morning-check')
+  assert vname == 'bill', f'Voce errata: {vname!r}'
+  assert model == MODEL_V3
+
+  # 5. 'weekly-strategy' ora → bill + tars-meta (override da wise)
+  assert SKILL_ROUTING.get('weekly-strategy') == ('bill', 'tars-meta'), f'weekly-strategy: {SKILL_ROUTING.get(\"weekly-strategy\")}'
+
+  print('OK tars-meta')
+  "
+
+check: ""
+
+teardown: ""

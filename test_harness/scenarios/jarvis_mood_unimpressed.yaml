@@ -1,0 +1,39 @@
+# sess.1765 — Verifica mood jarvis-unimpressed: inject_jarvis_tags prepende [unimpressed] o [exhales]
+# Patto Art.11: quando Mattia annuncia decisione già flaggata come trap,
+# la voce deve esprimere impassibilita calcolata, non eco affettiva.
+# Zero quota burn — dry-run router only.
+name: Jarvis Mood Unimpressed
+description: inject_jarvis_tags(text, 'jarvis-unimpressed') prepend [unimpressed]/[exhales]; skill 'unimpressed' route a andy+jarvis-unimpressed
+timeout: 8
+
+setup: ""
+
+action: |
+  /opt/homebrew/bin/python3 -c "
+  import sys
+  sys.path.insert(0, '$HOME/scripts')
+  from voice_router import inject_jarvis_tags, select_voice, has_audio_tags, SKILL_ROUTING, MODEL_V3
+
+  # 1. Testo piano → prepend [unimpressed] o [exhales]
+  text_in = 'Ho deciso di lanciare comunque senza verificare i dati.'
+  out = inject_jarvis_tags(text_in, 'jarvis-unimpressed')
+  assert has_audio_tags(out), f'Nessun tag iniettato: {out!r}'
+  assert out.startswith('[unimpressed]') or out.startswith('[exhales]'), f'Tag errato: {out[:30]!r}'
+
+  # 2. Mood standard non deve essere iniettato (zero-breaking)
+  out_std = inject_jarvis_tags('Signore, briefing.', 'jarvis')
+  assert not has_audio_tags(out_std), f'Injection su mood standard: {out_std!r}'
+
+  # 3. Skill routing 'unimpressed' → andy + jarvis-unimpressed
+  assert 'unimpressed' in SKILL_ROUTING, 'skill unimpressed mancante in SKILL_ROUTING'
+  vid, settings, model, vname = select_voice(skill='unimpressed')
+  assert vname == 'andy', f'Voce errata: {vname!r}'
+  assert model == MODEL_V3, f'Modello errato: {model!r}'
+  assert settings['stability'] == 0.35, f'Stability errata: {settings[\"stability\"]}'
+
+  print('OK unimpressed')
+  "
+
+check: ""
+
+teardown: ""

@@ -1,0 +1,39 @@
+# sess.1765 — Verifica mood jarvis-laugh: inject_jarvis_tags prepende [chuckles]/[laughs]
+# + scatter mid-sentence su segnali vittoria (chiuso/riuscito/pagato/ecc.)
+# Zero quota burn — dry-run router only.
+name: Jarvis Mood Laugh
+description: inject_jarvis_tags(text, 'jarvis-laugh') prepend + scatter su segnali vittoria
+timeout: 8
+
+setup: ""
+
+action: |
+  /opt/homebrew/bin/python3 -c "
+  import sys
+  sys.path.insert(0, '$HOME/scripts')
+  from voice_router import inject_jarvis_tags, select_voice, has_audio_tags, MODEL_V3
+
+  # 1. Testo con segnale vittoria deve ricevere prepend
+  text_win = 'F24 pagato in tempo, signore. Tutto in ordine.'
+  out = inject_jarvis_tags(text_win, 'jarvis-laugh')
+  assert has_audio_tags(out), f'Nessun tag iniettato: {out!r}'
+  assert out.startswith('[chuckles]') or out.startswith('[laughs]'), f'Prefix errato: {out[:30]!r}'
+
+  # 2. Testo senza segnali vittoria deve comunque ricevere prepend (ma no scatter)
+  text_plain = 'Signore, il daemon e operativo.'
+  out2 = inject_jarvis_tags(text_plain, 'jarvis-laugh')
+  assert has_audio_tags(out2), f'Prepend mancante su testo plain: {out2!r}'
+
+  # 3. select_voice deve tornare andy + v3 + stability 0.25
+  vid, settings, model, vname = select_voice(mood='jarvis-laugh')
+  assert vname == 'andy', f'Voce errata: {vname!r}'
+  assert model == MODEL_V3, f'Modello errato: {model!r}'
+  assert settings['stability'] == 0.25, f'Stability errata: {settings[\"stability\"]}'
+  assert settings['style'] == 0.70, f'Style errata: {settings[\"style\"]}'
+
+  print('OK laugh')
+  "
+
+check: ""
+
+teardown: ""

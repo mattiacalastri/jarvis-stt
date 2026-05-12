@@ -1,0 +1,47 @@
+# sess.1765 — TARS deadpan: inject_tars_tags prepend [deadpan]/[robotic]/[mechanical]
+# Verifica anti-cross-mood: ZERO [chuckles]/[laughs] nell'output.
+# Skill 'check' deve routare a bill + tars-deadpan + eleven_v3.
+# Zero quota burn — dry-run router only.
+name: TARS Deadpan
+description: inject_tars_tags(text, 'tars-deadpan') prepend meccanico + anti-cross-mood check
+timeout: 8
+
+setup: ""
+
+action: |
+  /opt/homebrew/bin/python3 -c "
+  import sys
+  sys.path.insert(0, '$HOME/scripts')
+  from voice_router import inject_tars_tags, select_voice, has_audio_tags, SKILL_ROUTING, MODEL_V3
+
+  # 1. Prepend tag meccanico su testo plain
+  text_in = 'F24 deadline meno 5 giorni. Cassa insufficiente. Analisi completata.'
+  out = inject_tars_tags(text_in, 'tars-deadpan')
+  assert has_audio_tags(out), f'Nessun tag iniettato: {out!r}'
+  prefix = out.split()[0]
+  assert prefix in ('[deadpan]', '[robotic]', '[mechanical]'), f'Prefix errato: {prefix!r}'
+
+  # 2. Anti-cross-mood: ZERO chuckles/laughs in output TARS
+  assert '[chuckles]' not in out, f'Cross-mood chuckles leak: {out!r}'
+  assert '[laughs]'   not in out, f'Cross-mood laughs leak: {out!r}'
+
+  # 3. Testo con tag pre-esistenti NON modificato (zero-breaking)
+  already_tagged = '[robotic] Già taggato.'
+  out2 = inject_tars_tags(already_tagged, 'tars-deadpan')
+  assert out2 == already_tagged, f'Testo taggato modificato: {out2!r}'
+
+  # 4. Skill 'check' → bill + tars-deadpan + eleven_v3
+  assert SKILL_ROUTING.get('check') == ('bill', 'tars-deadpan'), f'Routing check errato: {SKILL_ROUTING.get(\"check\")}'
+  vid, settings, model, vname = select_voice(skill='check')
+  assert vname == 'bill', f'Voce errata: {vname!r}'
+  assert model == MODEL_V3, f'Modello errato: {model!r}'
+  assert settings['stability'] == 0.60, f'Stability errata: {settings[\"stability\"]}'
+  assert settings['style'] == 0.20, f'Style errata: {settings[\"style\"]}'
+  assert 'speed' not in settings, 'speed non deve essere in settings v3'
+
+  print('OK tars-deadpan')
+  "
+
+check: ""
+
+teardown: ""
